@@ -31,7 +31,7 @@ float lookDownAngle = 0;       // Angle for "look down"
 float lookUpAngle = 0;         // Angle for "look up"
 int16_t savedDistance = 0;     // Distance value
 
-float x_Acceloffset, y_Acceloffset, z_Acceloffset;
+float x_Acceloffset, y_Acceloffset, z_Acceloffset, x_Gyrooffset, y_Gyrooffset, z_Gyrooffset;
 
 int buffersize = 1000;  //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
 int acel_deadzone = 8;  //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
@@ -85,6 +85,9 @@ void setup() {
   x_Acceloffset = readFloatFromEEPROM(0);
   y_Acceloffset = readFloatFromEEPROM(4);
   z_Acceloffset = readFloatFromEEPROM(8);
+  x_Gyrooffset = readFloatFromEEPROM(12):
+  y_Gyrooffset = readFloatFromEEPROM(14);
+  z_Gyrooffset = readFloatFromEEPROM(18);
   mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
 
 
