@@ -81,7 +81,7 @@ void setup() {
 
   byte status = mpu.begin();
    delay(1000);  // รอให้เซ็นเซอร์ตั้งตัวก่อน
-  mpu.calcOffsets(true, true);
+ mpu.calcOffsets(true, true);
   x_Acceloffset = readFloatFromEEPROM(0);
   y_Acceloffset = readFloatFromEEPROM(4);
   z_Acceloffset = readFloatFromEEPROM(8);
@@ -89,7 +89,7 @@ void setup() {
   y_Gyrooffset = readFloatFromEEPROM(14);
   z_Gyrooffset = readFloatFromEEPROM(18);
   mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
-
+  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset);
 
   // แสดงเมนูเริ่มต้น
   updateMenu();
@@ -189,13 +189,20 @@ void showOptionScreen1(const char *optionName) {
   OLED.println("GYRO MPU-6050");
   OLED.setCursor(55,30);
   OLED.println("offset setting");
-    writeFloatToEEPROM(0, mpu.getAccX()); // +4 byat
-  writeFloatToEEPROM(4, mpu.getAccY());
-  writeFloatToEEPROM(8, mpu.getAccZ());
-  x_Acceloffset = readFloatFromEEPROM(0);
-  y_Acceloffset = readFloatFromEEPROM(4);
-  z_Acceloffset = readFloatFromEEPROM(8);
+  x_Acceloffset = mpu.getAccX();
+  y_Acceloffset = mpu.getAccY();
+  z_Acceloffset = mpu.getAccZ();
+  x_Gyrooffset = mpu.getGyroX();
+  y_Gyrooffset = mpu.getGyroY();
+  z_Gyrooffset = mpu.getGyroZ();
+  writeFloatToEEPROM(0, x_Acceloffset);
+  writeFloatToEEPROM(4, y_Acceloffset);
+  writeFloatToEEPROM(8, z_Acceloffset);
+  writeFloatToEEPROM(12, x_Gyrooffset);
+  writeFloatToEEPROM(14, y_Gyrooffset);
+  writeFloatToEEPROM(18, z_Gyrooffset);
   mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
+  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); // Adjust values based on actual offset readings
   delay(1000);
   buttonPressCount = 0;  // Resetting button press count
   }
