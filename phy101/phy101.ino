@@ -6,11 +6,13 @@
 #include <HardwareSerial.h>
 #include "stm32f1xx.h"
 #include <MPU6050_light.h>
+#include <EEPROM.h>
 
 
 
 //Memory: 224 Bytes//
 ///////////////////////////////////   CONFIGURATION   /////////////////////////////
+int address = 0;
 
 bool isCounting = false;  
 unsigned long startTime = 0;
@@ -29,13 +31,7 @@ float lookDownAngle = 0;       // Angle for "look down"
 float lookUpAngle = 0;         // Angle for "look up"
 int16_t savedDistance = 0;     // Distance value
 
-float x_Acceloffset = 0.0;
-float y_Acceloffset = 1.01;
-float z_Acceloffset = -0.26;
-
-float x_Gyrooffset = -54.26;
-float y_Gyrooffset = -7.40;
-float z_Gyrooffset = -2.73;
+float x_Acceloffset, y_Acceloffset, z_Acceloffset, x_Gyrooffset, y_Gyrooffset, z_Gyrooffset;
 
 int buffersize = 1000;  //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
 int acel_deadzone = 8;  //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
@@ -77,6 +73,20 @@ void setup() {
   OLED.display();
   delay(2000);
 
+ if (isnan(readFloatFromEEPROM(0)) || isnan(readFloatFromEEPROM(4)) || isnan(readFloatFromEEPROM(8)) || isnan(readFloatFromEEPROM(12)) || isnan(readFloatFromEEPROM(16)) || isnan(readFloatFromEEPROM(20))) {
+    OLED.clearDisplay();
+    OLED.setCursor(56,30);
+    Serial.println("offset data have damaged");
+    clearEEPROMRange(0, 20);
+     delay(2000);
+    }
+  x_Acceloffset = readFloatFromEEPROM(0);
+  y_Acceloffset = readFloatFromEEPROM(4);
+  z_Acceloffset = readFloatFromEEPROM(8);
+  x_Gyrooffset = readFloatFromEEPROM(12);
+  y_Gyrooffset = readFloatFromEEPROM(16);
+  z_Gyrooffset = readFloatFromEEPROM(20);
+
   pinMode(BUTTON_R, INPUT_PULLUP);
   pinMode(BUTTON_L, INPUT_PULLUP);
   pinMode(BUTTON_SELECT, INPUT_PULLUP);
@@ -85,10 +95,8 @@ void setup() {
 
   byte status = mpu.begin();
    delay(1000);  // รอให้เซ็นเซอร์ตั้งตัวก่อน
-  mpu.calcOffsets(true, true);
-  /*mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
-  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset, z_Gyrooffset);  // Adjust values based on actual offset readings*/
-
+ mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
+ mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset);
 
   // แสดงเมนูเริ่มต้น
   updateMenu();
@@ -175,8 +183,9 @@ void showOptionScreen1(const char *optionName) {
   displayDistance();
   OLED.setCursor(20, 10);
   OLED.println("GYRO reoffset");
- /* OLED.print("aY: "); OLED.print(a.acceleration.y); OLED.print("  aX: "); OLED.println(a.acceleration.x); OLED.print("aZ: "); OLED.println(a.acceleration.z);
-  OLED.print("gY: "); OLED.print(g.gyro.y); OLED.print("  gX: "); OLED.println(g.gyro.x); OLED.print("gZ: "); OLED.println(g.gyro.z);*/
+ OLED.print("aY: "); OLED.print(x_Acceloffset); OLED.print("  aX: "); OLED.println(y_Acceloffset); OLED.print("aZ: "); OLED.println(z_Acceloffset);
+ OLED.print("gY: "); OLED.print(x_Gyrooffset); OLED.print("  gX: "); OLED.println(y_Gyrooffset); OLED.print("gZ: "); OLED.println(z_Gyrooffset);
+
   if (buttonWasReleased(BUTTON_SELECT)) {
     delay(10);
     OLED.clearDisplay();
@@ -189,7 +198,26 @@ void showOptionScreen1(const char *optionName) {
   OLED.println("GYRO MPU-6050");
   OLED.setCursor(55,30);
   OLED.println("offset setting");
-  mpu.calcOffsets();
+  delay(500);
+  mpu.calcOffsets(true, true);
+  x_Acceloffset = mpu.getAccXoffset();
+  y_Acceloffset = mpu.getAccYoffset();
+  z_Acceloffset = mpu.getAccZoffset();
+  x_Gyrooffset = mpu.getGyroXoffset();
+  y_Gyrooffset = mpu.getGyroYoffset();
+  z_Gyrooffset = mpu.getGyroZoffset();
+ OLED.clearDisplay();
+  OLED.setCursor(55,30);
+ OLED.println("clearingEEPROM");
+ delay(500);
+    writeFloatToEEPROM(0, x_Acceloffset);
+  writeFloatToEEPROM(4, y_Acceloffset);
+  writeFloatToEEPROM(8, z_Acceloffset);
+  writeFloatToEEPROM(12, x_Gyrooffset);
+  writeFloatToEEPROM(16, y_Gyrooffset);
+  writeFloatToEEPROM(20, z_Gyrooffset);
+  mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
+  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); // Adjust values based on actual offset readings
   delay(1000);
   buttonPressCount = 0;  // Resetting button press count
   }
@@ -332,9 +360,9 @@ if (buttonPressCount == 1) {  // ใช้ if แทน while เพื่อล
     unsigned long elapsedTime = millis() - startTime;
     Serial.print(elapsedTime);
 
-    if (elapsedTime >= 1000) {  // เมื่อครบ 1 วินาที
+    if (elapsedTime >= 2000) {  // เมื่อครบ 1 วินาที
         Distance2 = Distance / 100.00;
-        Serial.println("Finished counting 1 second!");
+        Serial.println("Finished counting 2 second!");
         
        // vl53.stopRanging();  // หยุดการวัดระยะ
         fast = (Distance2 - Distance1) / (elapsedTime / 1000.0);  
@@ -454,6 +482,24 @@ bool buttonWasReleased(int buttonPin) {
   buttonState[buttonIndex] = currentButtonState;
   return false;
 }
+
+void writeFloatToEEPROM(int address, float value) {
+  byte* p = (byte*)(void*)&value;
+  for (int i = 0; i < sizeof(float); i++) {
+    EEPROM.write(address + i, *(p + i));
+  }
+}
+
+float readFloatFromEEPROM(int address) {
+  byte buffer[4];
+  for (int i = 0; i < sizeof(float); i++) {
+    buffer[i] = EEPROM.read(address + i);
+  }
+  float value;
+  memcpy(&value, buffer, sizeof(float));
+  return value;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 void displayDistance() {
    TOF_Inquire_Decoding(0);//Query and decode TOF data 查询获取TOF数据，并进行解码
@@ -471,6 +517,12 @@ void Highrecord_F() {
   float h1 = savedDistance * tan(angleTopRad); //ใช้หน่วยเป็นเรเดียน
   float h2 = savedDistance * tan(angleBottomRad);
   Height = h1 + h2;
+}
+
+void clearEEPROMRange(int startAddress, int endAddress) {
+  for (int i = startAddress; i <= endAddress; i++) {
+    EEPROM.write(i, 1);  // ลบข้อมูลที่ตำแหน่ง i
+  }
 }
 
 void gyroread() {
