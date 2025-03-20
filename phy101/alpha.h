@@ -12,18 +12,33 @@
 
 //Memory: 224 Bytes//
 ///////////////////////////////////   CONFIGURATION   /////////////////////////////
+
+// ค่าคงที่ของ Kalman Filter
+float Q_angle = 0.001;  // Process noise covariance for accelerometer
+float Q_bias = 0.003;   // Process noise covariance for gyro bias
+float R_measure = 0.03; // Measurement noise covariance
+
+// ตัวแปร Kalman Filter
+float angle = 0.0;  // มุมที่คำนวณได้
+float bias = 0.0;   // Bias จาก Gyro
+float rate = 0.0;   // Unbiased rate
+
+float P[2][2] = {{0, 0}, {0, 0}};  // Error covariance matrix
+
 int address = 0;
 
 bool isCounting = false;  
 unsigned long startTime = 0;
 
 unsigned long timer = 0;
+unsigned long timerdt;
+float dt;
 TwoWire Wire2(PB11, PB10);  
 MPU6050 mpu(Wire2);
 
 
 int16_t Distance;
-float roll, pitch, yaw , Height, fast, Distance2 ,Distance1 ;
+float roll, pitch, Broll, Bpitch, yaw , Height, fast, Distance2 ,Distance1 ;
 
 
 int16_t buttonPressCount = 0;  // Counter for button presses
@@ -31,7 +46,10 @@ float lookDownAngle = 0;       // Angle for "look down"
 float lookUpAngle = 0;         // Angle for "look up"
 int16_t savedDistance = 0;     // Distance value
 
-float x_Acceloffset, y_Acceloffset, z_Acceloffset, x_Gyrooffset, y_Gyrooffset, z_Gyrooffset;
+float x_Acceloffset, y_Acceloffset, z_Acceloffset, 
+      x_Gyrooffset, y_Gyrooffset, z_Gyrooffset, 
+      x_Angle, y_Angle, z_Angle,
+      FilterGyroCoef, FilterAccCoef;
 
 int buffersize = 1000;  //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
 int acel_deadzone = 8;  //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
@@ -63,12 +81,6 @@ unsigned long lastButtonPress = 0;  // For debouncing
 void setup() {
   Serial.begin(115200);
   TOF_UART.begin(921600);
-  x_Acceloffset = readFloatFromEEPROM(0);
-  y_Acceloffset = readFloatFromEEPROM(4);
-  z_Acceloffset = readFloatFromEEPROM(8);
-  x_Gyrooffset = readFloatFromEEPROM(12);
-  y_Gyrooffset = readFloatFromEEPROM(16);
-  z_Gyrooffset = readFloatFromEEPROM(20);
    Wire2.begin(); 
   if (!OLED.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     // สั่งให้จอ OLED เริ่มทำงานที่ Address 0x3C
@@ -78,6 +90,18 @@ void setup() {
   }
   OLED.display();
   delay(2000);
+
+  x_Acceloffset = readFloatFromEEPROM(0);
+  y_Acceloffset = readFloatFromEEPROM(4);
+  z_Acceloffset = readFloatFromEEPROM(8);
+  x_Gyrooffset = readFloatFromEEPROM(12);
+  y_Gyrooffset = readFloatFromEEPROM(16);
+  z_Gyrooffset = readFloatFromEEPROM(20);
+  x_Angle = readFloatFromEEPROM(24);
+  y_Angle = readFloatFromEEPROM(28);
+  z_Angle = readFloatFromEEPROM(32);
+  FilterGyroCoef = readFloatFromEEPROM(36);
+  FilterAccCoef = readFloatFromEEPROM(40);
 
   pinMode(BUTTON_R, INPUT_PULLUP);
   pinMode(BUTTON_L, INPUT_PULLUP);
@@ -89,9 +113,12 @@ void setup() {
    delay(1000);  // รอให้เซ็นเซอร์ตั้งตัวก่อน
  mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset);
+ mpu.setFilterGyroCoef(FilterGyroCoef);
+ mpu.setFilterAccCoef(FilterAccCoef);
 
   // แสดงเมนูเริ่มต้น
   updateMenu();
+  timerdt = millis();
 }
 
 enum ProgramState {
@@ -176,6 +203,9 @@ void showOptionScreen1(const char *optionName) {
   OLED.setCursor(20, 10);
   OLED.println("GYRO reoffset");
  OLED.print("aY: "); OLED.print(x_Acceloffset); OLED.print("  aX: "); OLED.println(y_Acceloffset); OLED.print("aZ: "); OLED.println(z_Acceloffset);
+ OLED.print("gY: "); OLED.print(x_Gyrooffset); OLED.print("  gX: "); OLED.println(y_Gyrooffset); OLED.print("gZ: "); OLED.println(z_Gyrooffset);
+ OLED.print("alY: "); OLED.print(y_Angle); OLED.print("  alX: "); OLED.println(x_Angle); OLED.print("alZ: "); OLED.println(z_Angle);
+
   if (buttonWasReleased(BUTTON_SELECT)) {
     delay(10);
     OLED.clearDisplay();
@@ -189,26 +219,37 @@ void showOptionScreen1(const char *optionName) {
   OLED.setCursor(55,30);
   OLED.println("offset setting");
   delay(500);
-  /*mpu.calcOffsets(true, true);
+  mpu.calcOffsets();
   x_Acceloffset = mpu.getAccXoffset();
   y_Acceloffset = mpu.getAccYoffset();
   z_Acceloffset = mpu.getAccZoffset();
   x_Gyrooffset = mpu.getGyroXoffset();
   y_Gyrooffset = mpu.getGyroYoffset();
   z_Gyrooffset = mpu.getGyroZoffset();
- clearEEPROMRange(0, 18);
+  x_Angle = mpu.getAngleX();
+  y_Angle = mpu.getAngleY();
+  z_Angle = mpu.getAngleZ();
+  FilterGyroCoef = mpu.getFilterGyroCoef();
+  FilterAccCoef = mpu.getFilterAccCoef();
  OLED.clearDisplay();
   OLED.setCursor(55,30);
  OLED.println("clearingEEPROM");
  delay(500);
-  x_Acceloffset = readFloatFromEEPROM(0);
-  y_Acceloffset = readFloatFromEEPROM(4);
-  z_Acceloffset = readFloatFromEEPROM(8);
-  x_Gyrooffset = readFloatFromEEPROM(12);
-  y_Gyrooffset = readFloatFromEEPROM(16);
-  z_Gyrooffset = readFloatFromEEPROM(20);
+    writeFloatToEEPROM(0, x_Acceloffset);
+  writeFloatToEEPROM(4, y_Acceloffset);
+  writeFloatToEEPROM(8, z_Acceloffset);
+  writeFloatToEEPROM(12, x_Gyrooffset);
+  writeFloatToEEPROM(16, y_Gyrooffset);
+  writeFloatToEEPROM(20, z_Gyrooffset);
+  writeFloatToEEPROM(24, x_Angle);
+  writeFloatToEEPROM(28, y_Angle);
+  writeFloatToEEPROM(32, z_Angle);
+  writeFloatToEEPROM(36, FilterGyroCoef);
+  writeFloatToEEPROM(40, FilterAccCoef);
   mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
-  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); // Adjust values based on actual offset readings*/
+  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); // Adjust values based on actual offset readings
+  mpu.setFilterGyroCoef(FilterGyroCoef);
+  mpu.setFilterAccCoef(FilterAccCoef);
   delay(1000);
   buttonPressCount = 0;  // Resetting button press count
   }
@@ -223,15 +264,31 @@ void showOptionScreen1(const char *optionName) {
     gyroread(); 
     OLED.setCursor(0, 0); 
     OLED.print("Roll: ");
-  OLED.println(roll, 2);  // แสดง Roll ใน 0-360 องศา
+  OLED.println(roll);  // แสดง Roll ใน 0-360 องศา
   OLED.print("Pitch: ");
-  OLED.println(pitch, 2);  // แสดง Pitch ใน 0-360 องศา*/
+  OLED.println(pitch);  // แสดง Pitch ใน 0-360 องศา*/
 
    OLED.println("TOF_0");
    OLED.setCursor(0, 50);
     OLED.print("Distance "); OLED.print(TOF_0.dis); OLED.println(" MM");
   break;
-
+  
+   case 2:
+   mpu.update();
+   if((millis()-timer)>10){
+    OLED.clearDisplay();
+  OLED.setCursor(20, 0);
+  OLED.setTextSize(1);
+  OLED.setTextColor(WHITE, BLACK);
+  displayDistance();
+  OLED.setCursor(20, 10);
+  OLED.println("gyro-alldata");
+ OLED.print("acY: "); OLED.print(mpu.getAngleY()); OLED.print("  acX: "); OLED.println(mpu.getAngleX()); OLED.print("acZ: "); OLED.println(mpu.getAngleZ());
+ OLED.print("GY: "); OLED.print(mpu.getGyroX()); OLED.print("  GX: "); OLED.println(mpu.getGyroY()); OLED.print("GZ: "); OLED.println(mpu.getGyroZ());
+ timer = millis();  
+ }
+  break;
+ 
   default:                 // Reset after the third press
       buttonPressCount = 0;  // Resetting button press count
       break;
@@ -351,9 +408,9 @@ if (buttonPressCount == 1) {  // ใช้ if แทน while เพื่อล
     unsigned long elapsedTime = millis() - startTime;
     Serial.print(elapsedTime);
 
-    if (elapsedTime >= 1000) {  // เมื่อครบ 1 วินาที
+    if (elapsedTime >= 2000) {  // เมื่อครบ 1 วินาที
         Distance2 = Distance / 100.00;
-        Serial.println("Finished counting 1 second!");
+        Serial.println("Finished counting 2 second!");
         
        // vl53.stopRanging();  // หยุดการวัดระยะ
         fast = (Distance2 - Distance1) / (elapsedTime / 1000.0);  
@@ -509,24 +566,73 @@ void Highrecord_F() {
   float h2 = savedDistance * tan(angleBottomRad);
   Height = h1 + h2;
 }
-/*
+
 void clearEEPROMRange(int startAddress, int endAddress) {
   for (int i = startAddress; i <= endAddress; i++) {
-    EEPROM.write(i, 0xFF);  // ลบข้อมูลที่ตำแหน่ง i
+    EEPROM.write(i, 1);  // ลบข้อมูลที่ตำแหน่ง i
   }
-}*/
+}
 
 void gyroread() {
-  mpu.update();
-  
-  if((millis()-timer)>10){ // print data every 10ms
-  // ปกติ: Pitch = atan2(Ay, Az), Roll = atan2(Ax, sqrt(Ay^2 + Az^2))
-  // แกน y เป็น แกนหลักแทน x
-  /*roll pitch หน่วยเป็นองศา*/
-roll = atan2(mpu.getAccZ(), mpu.getAccX()) * RAD_TO_DEG; // (180 / PI)
-pitch = atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG;
-	timer = millis();  
-  }
-  if (pitch < 0) pitch += 360.0;
-  if (roll < 0) roll += 360.0;
+    mpu.update();
+
+    if ((millis() - timer) > 10) { // print data every 10ms
+        float accX = mpu.getAccX();
+        float accY = mpu.getAccY();
+        float accZ = mpu.getAccZ();
+        float gyroX = mpu.getGyroX(); // หน่วยเป็น °/s
+        float gyroY = mpu.getGyroY();
+
+        // คำนวณมุมจาก Accelerometer
+        float rollAcc = atan2(accZ, accX) * RAD_TO_DEG;
+        float pitchAcc = atan2(accY, sqrt(accX * accX + accZ * accZ)) * RAD_TO_DEG;
+
+        // คำนวณ dt
+        dt = (millis() - timer) / 1000.0;
+        timer = millis();
+
+        // ใช้ Kalman Filter
+        roll = kalmanFilter(rollAcc, gyroX, dt);
+        pitch = kalmanFilter(pitchAcc, gyroY, dt);
+
+        // ปรับมุมให้อยู่ในช่วง -180° ถึง +180°
+        if (pitch > 180) pitch -= 360;
+        if (roll > 180) roll -= 360;
+    }
 }
+
+
+float kalmanFilter(float newAngle, float newRate, float dt) {
+    // 1. คำนวณมุมจาก Gyroscope
+    rate = newRate - bias;
+    angle += dt * rate;
+
+    // 2. ปรับค่าความไม่แน่นอน
+    P[0][0] += dt * (dt * P[1][1] - P[0][1] - P[1][0] + Q_angle);
+    P[0][1] -= dt * P[1][1];
+    P[1][0] -= dt * P[1][1];
+    P[1][1] += Q_bias * dt;
+
+    // 3. คำนวณ Kalman Gain
+    float S = P[0][0] + R_measure;
+    float K[2];
+    K[0] = P[0][0] / S;
+    K[1] = P[1][0] / S;
+
+    // 4. ปรับค่าโดยใช้ Accelerometer
+    float y = newAngle - angle;
+    angle += K[0] * y;
+    bias += K[1] * y;
+
+    // 5. ปรับค่าความไม่แน่นอน
+    float P00_temp = P[0][0];
+    float P01_temp = P[0][1];
+
+    P[0][0] -= K[0] * P00_temp;
+    P[0][1] -= K[0] * P01_temp;
+    P[1][0] -= K[1] * P00_temp;
+    P[1][1] -= K[1] * P01_temp;
+
+    return angle;
+}
+
