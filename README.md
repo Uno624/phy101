@@ -10,10 +10,11 @@
 
 ![Screenshot 2025-04-14 203343](https://github.com/user-attachments/assets/4355a980-b48a-4424-b2f8-f6d54c9a99fb)
 
-pitch0tan เป็นการใช้สมการ atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG เอาค่าอัตราเร่งมาหาค่ามุมองศาแต่หมุนได้ไม่เกิน 75-80องศา pitchget เป็นค่าองศาที่มาจาก LIBARRY <MPU6050_light.h> อ่านมุมได้เกิน 75 แต่ค่าคาคเคลือนตอนเวลาเขย่าหรือหันเร็วๆ (เราใช้pitch0tan)
+ปรับ offset ด้วยการกดไกล (ได้ทุกหน้าในmenuoffset)
+
 ![20250414_175904](https://github.com/user-attachments/assets/2d7a3707-82d2-4c6f-b73d-698c216cfd6c)
 
-ปรับ offset ด้วยการกดไกล (ได้ทุกหน้าในmenuoffset)
+pitch0tan เป็นการใช้สมการ atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG เอาค่าอัตราเร่งมาหาค่ามุมองศาแต่หมุนได้ไม่เกิน 75-80องศา pitchget เป็นค่าองศาที่มาจาก LIBARRY <MPU6050_light.h> อ่านมุมได้เกิน 75 แต่ค่าคาคเคลือนตอนเวลาเขย่าหรือหันเร็วๆ (เราใช้pitch0tan)
 ![20250414_180026](https://github.com/user-attachments/assets/d73b1946-47d4-40dd-87ab-f6aea7c9565a)
 
 ****************************************************************************************************************
