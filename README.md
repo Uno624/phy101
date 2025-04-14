@@ -1,6 +1,6 @@
 ![Screenshot 2025-03-28 155803](https://github.com/user-attachments/assets/dd13fec4-c6e5-4747-83f2-dadfa637a1a8)
 
-สมการ High's taget 3จุด
+สมการ High's taget 3จุด เส้นตรงกลางสามเหลียมคือ common พายามให้องศาใกล้ 0 มากสุด เพราะมันจะเก็บระยาเราจากเป้าหมาย
 ![Screenshot 2025-04-14 201831](https://github.com/user-attachments/assets/429babe4-2b87-4b79-b036-8a8eada19fbe)
 
 สมการ how fase boy
