@@ -12,47 +12,32 @@
 
 //Memory: 224 Bytes//
 ///////////////////////////////////   CONFIGURATION   /////////////////////////////
-
-// ค่าคงที่ของ Kalman Filter
-float Q_angle = 0.001;  // Process noise covariance for accelerometer
-float Q_bias = 0.003;   // Process noise covariance for gyro bias
-float R_measure = 0.03; // Measurement noise covariance
-
-// ตัวแปร Kalman Filter
-float angle = 0.0;  // มุมที่คำนวณได้
-float bias = 0.0;   // Bias จาก Gyro
-float rate = 0.0;   // Unbiased rate
-
-float P[2][2] = {{0, 0}, {0, 0}};  // Error covariance matrix
-
 int address = 0;
 
 bool isCounting = false;  
 unsigned long startTime = 0;
 
 unsigned long timer = 0;
-unsigned long timerdt;
-float dt;
 TwoWire Wire2(PB11, PB10);  
 MPU6050 mpu(Wire2);
 
 
 int16_t Distance;
-float roll, pitch, Broll, Bpitch, yaw , Height, fast, Distance2 ,Distance1 ;
+float roll, pitch, yaw , Height, Height2P, fast, Distance2 ,Distance1 ,pitcha ;
 
 
-int16_t buttonPressCount = 0;  // Counter for button presses
-float lookDownAngle = 0;       // Angle for "look down"
-float lookUpAngle = 0;         // Angle for "look up"
-int16_t savedDistance = 0;     // Distance value
+int16_t buttonPressCount = 0;  
+int16_t buttonPressCount2 = 0;
+float lookDownAngle = 0;    
+float lookUpAngle = 0;       
+float Common2P = 0;  
+float Angle2P = 0;  
+float Common3P = 0;         
+int16_t savedDistance3P = 0;     
+int16_t savedDistance2PA = 0;   
+int16_t savedDistance2PB = 0;
 
-float x_Acceloffset, y_Acceloffset, z_Acceloffset, 
-      x_Gyrooffset, y_Gyrooffset, z_Gyrooffset, 
-      x_Angle, y_Angle, z_Angle,
-      FilterGyroCoef, FilterAccCoef;
-
-int buffersize = 1000;  //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
-int acel_deadzone = 8;  //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
+float x_Acceloffset, y_Acceloffset, z_Acceloffset, x_Gyrooffset, y_Gyrooffset, z_Gyrooffset;
 
 
 #define SCREEN_WIDTH 128
@@ -71,7 +56,7 @@ HardwareSerial Serial2(PA3, PA2);
 
 
 int menuIndex = 0;
-const char *menuItems[] = { "Debug sensor", "high's taget", "how far boy", "record" };
+const char *menuItems[] = { "Debug sensor", "high's taget", "how fast boy", "record" };
 const int menuSize = sizeof(menuItems) / sizeof(menuItems[0]);
 
 unsigned long lastButtonPress = 0;  // For debouncing
@@ -91,17 +76,19 @@ void setup() {
   OLED.display();
   delay(2000);
 
+ if (isnan(readFloatFromEEPROM(0)) || isnan(readFloatFromEEPROM(4)) || isnan(readFloatFromEEPROM(8)) || isnan(readFloatFromEEPROM(12)) || isnan(readFloatFromEEPROM(16)) || isnan(readFloatFromEEPROM(20))) {
+    OLED.clearDisplay();
+    OLED.setCursor(56,30);
+    Serial.println("offset data have damaged");
+    clearEEPROMRange(0, 20);
+     delay(2000);
+    }
   x_Acceloffset = readFloatFromEEPROM(0);
   y_Acceloffset = readFloatFromEEPROM(4);
   z_Acceloffset = readFloatFromEEPROM(8);
   x_Gyrooffset = readFloatFromEEPROM(12);
   y_Gyrooffset = readFloatFromEEPROM(16);
   z_Gyrooffset = readFloatFromEEPROM(20);
-  x_Angle = readFloatFromEEPROM(24);
-  y_Angle = readFloatFromEEPROM(28);
-  z_Angle = readFloatFromEEPROM(32);
-  FilterGyroCoef = readFloatFromEEPROM(36);
-  FilterAccCoef = readFloatFromEEPROM(40);
 
   pinMode(BUTTON_R, INPUT_PULLUP);
   pinMode(BUTTON_L, INPUT_PULLUP);
@@ -113,12 +100,11 @@ void setup() {
    delay(1000);  // รอให้เซ็นเซอร์ตั้งตัวก่อน
  mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset);
- mpu.setFilterGyroCoef(FilterGyroCoef);
- mpu.setFilterAccCoef(FilterAccCoef);
+  //mpu.calcOffsets(); // gyro and accelero
+ //mpu.upsideDownMounting = true;
 
   // แสดงเมนูเริ่มต้น
   updateMenu();
-  timerdt = millis();
 }
 
 enum ProgramState {
@@ -148,7 +134,7 @@ void loop() {
       break;
 
     case OPTION_3:
-      showOptionScreen3("how far boy");
+      showOptionScreen3("how fast boy");
       break;
 
     case OPTION_4:
@@ -202,9 +188,8 @@ void showOptionScreen1(const char *optionName) {
   displayDistance();
   OLED.setCursor(20, 10);
   OLED.println("GYRO reoffset");
- OLED.print("aY: "); OLED.print(x_Acceloffset); OLED.print("  aX: "); OLED.println(y_Acceloffset); OLED.print("aZ: "); OLED.println(z_Acceloffset);
- OLED.print("gY: "); OLED.print(x_Gyrooffset); OLED.print("  gX: "); OLED.println(y_Gyrooffset); OLED.print("gZ: "); OLED.println(z_Gyrooffset);
- OLED.print("alY: "); OLED.print(y_Angle); OLED.print("  alX: "); OLED.println(x_Angle); OLED.print("alZ: "); OLED.println(z_Angle);
+ OLED.print("aX: "); OLED.print(x_Acceloffset); OLED.print("  aY: "); OLED.println(y_Acceloffset); OLED.print("aZ: "); OLED.println(z_Acceloffset);
+ OLED.print("gX: "); OLED.print(x_Gyrooffset); OLED.print("  gY: "); OLED.println(y_Gyrooffset); OLED.print("gZ: "); OLED.println(z_Gyrooffset);
 
   if (buttonWasReleased(BUTTON_SELECT)) {
     delay(10);
@@ -219,18 +204,13 @@ void showOptionScreen1(const char *optionName) {
   OLED.setCursor(55,30);
   OLED.println("offset setting");
   delay(500);
-  mpu.calcOffsets();
+  mpu.calcOffsets(true, true);
   x_Acceloffset = mpu.getAccXoffset();
   y_Acceloffset = mpu.getAccYoffset();
   z_Acceloffset = mpu.getAccZoffset();
   x_Gyrooffset = mpu.getGyroXoffset();
   y_Gyrooffset = mpu.getGyroYoffset();
   z_Gyrooffset = mpu.getGyroZoffset();
-  x_Angle = mpu.getAngleX();
-  y_Angle = mpu.getAngleY();
-  z_Angle = mpu.getAngleZ();
-  FilterGyroCoef = mpu.getFilterGyroCoef();
-  FilterAccCoef = mpu.getFilterAccCoef();
  OLED.clearDisplay();
   OLED.setCursor(55,30);
  OLED.println("clearingEEPROM");
@@ -241,15 +221,8 @@ void showOptionScreen1(const char *optionName) {
   writeFloatToEEPROM(12, x_Gyrooffset);
   writeFloatToEEPROM(16, y_Gyrooffset);
   writeFloatToEEPROM(20, z_Gyrooffset);
-  writeFloatToEEPROM(24, x_Angle);
-  writeFloatToEEPROM(28, y_Angle);
-  writeFloatToEEPROM(32, z_Angle);
-  writeFloatToEEPROM(36, FilterGyroCoef);
-  writeFloatToEEPROM(40, FilterAccCoef);
-  mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // Adjust values based on actual offset readings
-  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); // Adjust values based on actual offset readings
-  mpu.setFilterGyroCoef(FilterGyroCoef);
-  mpu.setFilterAccCoef(FilterAccCoef);
+  mpu.setAccOffsets(x_Acceloffset, y_Acceloffset, z_Acceloffset); // setoffsetของ acc gyro
+  mpu.setGyroOffsets(x_Gyrooffset, y_Gyrooffset,  z_Gyrooffset); 
   delay(1000);
   buttonPressCount = 0;  // Resetting button press count
   }
@@ -263,32 +236,31 @@ void showOptionScreen1(const char *optionName) {
     OLED.clearDisplay();
     gyroread(); 
     OLED.setCursor(0, 0); 
-    OLED.print("Roll: ");
-  OLED.println(roll);  // แสดง Roll ใน 0-360 องศา
+    OLED.print("pitch0tan: ");
+  OLED.println(pitch, 2);  // แสดง Roll ใน 0-360 องศา
   OLED.print("Pitch: ");
-  OLED.println(pitch);  // แสดง Pitch ใน 0-360 องศา*/
+  OLED.println(pitcha, 2);  // แสดง Pitch ใน 0-360 องศา*/
 
    OLED.println("TOF_0");
    OLED.setCursor(0, 50);
     OLED.print("Distance "); OLED.print(TOF_0.dis); OLED.println(" MM");
   break;
-  
-   case 2:
-   mpu.update();
-   if((millis()-timer)>10){
+
+  case 2:
     OLED.clearDisplay();
   OLED.setCursor(20, 0);
   OLED.setTextSize(1);
   OLED.setTextColor(WHITE, BLACK);
   displayDistance();
   OLED.setCursor(20, 10);
-  OLED.println("gyro-alldata");
- OLED.print("acY: "); OLED.print(mpu.getAngleY()); OLED.print("  acX: "); OLED.println(mpu.getAngleX()); OLED.print("acZ: "); OLED.println(mpu.getAngleZ());
- OLED.print("GY: "); OLED.print(mpu.getGyroX()); OLED.print("  GX: "); OLED.println(mpu.getGyroY()); OLED.print("GZ: "); OLED.println(mpu.getGyroZ());
+  OLED.println("GYRO raw");
+   mpu.update();
+  if((millis()-timer)>10){
+ OLED.print("aY: "); OLED.print(mpu.getAccY()); OLED.print("  aX: "); OLED.println(mpu.getAccX()); OLED.print("aZ: "); OLED.println(mpu.getAccZ());
  timer = millis();  
- }
+  }
   break;
- 
+
   default:                 // Reset after the third press
       buttonPressCount = 0;  // Resetting button press count
       break;
@@ -304,90 +276,172 @@ void showOptionScreen1(const char *optionName) {
 }
 
 void showOptionScreen2(const char *optionName) {
-  // Update the OLED display
-  OLED.clearDisplay();
-  OLED.setCursor(20, 0);
-  OLED.setTextSize(1);
-  OLED.setTextColor(WHITE, BLACK);
-  OLED.println(optionName);
-  displayDistance();
-  gyroread();
-  OLED.setCursor(10, 50);
-  OLED.println("Press S to record");
-
-  // Handle button press actions
   if (buttonWasReleased(BUTTON_SELECT)) {
     buttonPressCount++;
   }
 
-  switch (buttonPressCount) {
-    case 1:  // First press: Record "look down" angle
+  if (buttonWasReleased(BUTTON_L)) {
+    buttonPressCount2++;
+    buttonPressCount = 0;
+  }
+  switch (buttonPressCount2) {
+    case 0:
       OLED.clearDisplay();
-      OLED.setCursor(56,30);
-        OLED.println("+");
-      lookDownAngle = pitch;  // Assuming roll is already updated in gyroread()
-      OLED.setCursor(0, 0);
-      OLED.print("Look Down Angle: ");
-      OLED.println(lookDownAngle);
+      OLED.setCursor(40, 0);
+      OLED.setTextSize(1);
+      OLED.setTextColor(WHITE, BLACK);
+      OLED.println("3 point");
+      displayDistance();
+      gyroread();
+      OLED.setCursor(10, 50);
+      OLED.println("Press S to record");
+      
+      switch (buttonPressCount) {
+        
+        case 1:
+          OLED.clearDisplay();
+         savedDistance3P = Distance / 10.0;
+          OLED.setCursor(56, 30);
+          OLED.println("+");
+          Common3P = pitcha;
+          if (Common3P == 0) {
+            Common3P = 360;
+          }
+          if (Common3P < 0) {
+            Common3P += 360;
+          }
+          OLED.setCursor(0, 0);
+          OLED.print("Common Angle: ");
+          OLED.println(Common3P);
+          OLED.setCursor(10, 52);
+          OLED.print("Distance: ");
+          OLED.print(savedDistance3P);
+          break;
+
+        case 2:
+          OLED.clearDisplay();
+          OLED.setCursor(56, 30);
+          OLED.println("+");
+          lookDownAngle = fmod(Common3P - pitcha + 360.0, 360.0);
+          lookDownAngle = 360.0 - lookDownAngle;
+          OLED.setCursor(0, 0);
+          OLED.print("Look Down Angle: ");
+          OLED.println(lookDownAngle);
+          break;
+
+        case 3:
+          OLED.clearDisplay();
+          lookUpAngle = fmod(Common3P - pitcha + 360.0, 360.0);
+          OLED.setCursor(56, 30);
+          OLED.println("+");
+          OLED.setCursor(0, 0);
+          OLED.print("Look Up Angle: ");
+          OLED.println(lookUpAngle);
+          break;
+
+        case 4:
+          Highrecord_3P();
+          OLED.clearDisplay();
+          OLED.setCursor(20, 0);
+          OLED.print("Height ");
+          OLED.print(Height);
+          OLED.print(" CM");
+          OLED.setCursor(10, 52);
+          OLED.println("Press S to re-record");
+          break;
+
+        default:
+          buttonPressCount = 0;
+          break;
+      }
       break;
 
-    case 2:  // Second press: Record "look up" angle
+    /*case 1:
       OLED.clearDisplay();
-      lookUpAngle = 360 - pitch;
-      OLED.setCursor(56,30);
-      OLED.println("+");
-      OLED.setCursor(0, 0);
-      OLED.print("Look Up Angle: ");
-      OLED.println(lookUpAngle);
+      OLED.setCursor(40, 0);
+      OLED.setTextSize(1);
+      OLED.setTextColor(WHITE, BLACK);
+      OLED.println("2 point");
+      displayDistance();
+      gyroread();
+      OLED.setCursor(10, 50);
+      OLED.println("Press S to record");
+      
+      switch (buttonPressCount) {
+        case 1:
+          OLED.clearDisplay();
+          OLED.setCursor(56, 30);
+          OLED.println("+");
+          Common2P = pitcha;
+          if (Common2P == 0) {
+            Common2P = 360;
+          }
+          if (Common2P < 0) {
+            Common2P += 360;
+          }
+          OLED.setCursor(0, 0);
+          OLED.print("Common Angle: ");
+          OLED.println(Common2P);
+          savedDistance2PA = Distance / 10.0;
+          OLED.setCursor(10, 52);
+          OLED.print("Distance: ");
+          OLED.print(savedDistance2PA);
+          break;
+
+        case 2:
+          OLED.clearDisplay();
+          Angle2P = fmod(Common2P - pitcha + 360.0, 360.0);
+          OLED.setCursor(56, 30);
+          OLED.println("+");
+          OLED.setCursor(20, 0);
+          OLED.print("Angle: ");
+          OLED.println(Angle2P);
+          savedDistance2PB = Distance / 10.0;
+          OLED.setCursor(10, 52);
+          OLED.print("Distance: ");
+          OLED.print(savedDistance2PB);
+          break;
+
+        case 3:
+          Highrecord_2P();
+          OLED.clearDisplay();
+          OLED.setCursor(20, 0);
+          OLED.print("Height ");
+          OLED.print(Height2P);
+          OLED.println(" CM");
+          OLED.print("Angle ");
+          OLED.print(Angle2P);
+          OLED.setCursor(10, 52);
+          OLED.println("Press S to re-record");
+          break;
+
+        default:
+          buttonPressCount = 0;
+          break;
+      }
       break;
 
-    case 3:         
-      OLED.clearDisplay();             // Third press: Measure distance
-      savedDistance = Distance/10;  // Assuming Distance is updated in displayDistance()
-      OLED.setCursor(56,30);
-      OLED.println("+");
-       OLED.setCursor(0, 0);
-      OLED.print("Distance: ");
-      OLED.print(savedDistance);
-      OLED.println(" CM");
-      OLED.setCursor(10, 52);
-      OLED.print("Pitch ");
-      OLED.print(pitch);
-      break;
-
-    case 4:  // Third press: Measure distance
-      Highrecord_F();
-      OLED.clearDisplay();
-      OLED.setCursor(20, 0);
-      OLED.print("Height ");
-      OLED.print(Height);
-      OLED.print(" CM");
-      OLED.setCursor(10, 52);
-      OLED.println("pass S to re-record");
-      break;
-
-    default:                 // Reset after the third press
-      buttonPressCount = 0;  // Resetting button press count
+    default:*/
+      buttonPressCount2 = 0;
       break;
   }
 
-  OLED.display();  // Update the OLED display
+  OLED.display();
 
-  // Handle return to main menu
   if (buttonWasReleased(BUTTON_R)) {
     currentState = MAIN_MENU;
     buttonPressCount = 0;
+    buttonPressCount2 = 0;
     updateMenu();
   }
 }
-
 
 void showOptionScreen3(const char *optionName) {
   OLED.clearDisplay();
   OLED.setCursor(0, 0);
   OLED.setTextSize(1);
   OLED.setTextColor(WHITE, BLACK);
-  float i = Distance/100.00;
+  float i = Distance/1000.00;
   OLED.print(i,2); OLED.print(" M  ");
   OLED.print(fast); OLED.print(" M/s");
   displayDistance();
@@ -400,7 +454,7 @@ if (buttonPressCount == 1) {  // ใช้ if แทน while เพื่อล
     if (!isCounting) {
         isCounting = true;
         startTime = millis();  
-        Distance1 = Distance / 100.00;  // เก็บระยะทางเริ่มต้น
+        Distance1 = Distance / 1000.00;  // เก็บระยะทางเริ่มต้น
         OLED.clearDisplay();
         OLED.println("Start Counting...");
     }
@@ -409,7 +463,7 @@ if (buttonPressCount == 1) {  // ใช้ if แทน while เพื่อล
     Serial.print(elapsedTime);
 
     if (elapsedTime >= 2000) {  // เมื่อครบ 1 วินาที
-        Distance2 = Distance / 100.00;
+        Distance2 = Distance / 1000.00;
         Serial.println("Finished counting 2 second!");
         
        // vl53.stopRanging();  // หยุดการวัดระยะ
@@ -438,14 +492,14 @@ void showOptionScreen4(const char *optionName) {
   OLED.setCursor(20, 0);
   OLED.setTextSize(1);
   OLED.setTextColor(WHITE, BLACK);
-  OLED.println("Height record  >>");
+  OLED.println("Height record 3P>>");
   OLED.setCursor(0, 20);
   OLED.print("LDA: ");
   OLED.println(lookDownAngle);
   OLED.print("LUA: ");
   OLED.println(lookUpAngle);
   OLED.print("Distance:       ");
-  OLED.print(savedDistance);
+  OLED.print(savedDistance3P);
   OLED.println(" CM");
   OLED.print("Height:       ");
   OLED.print(Height);
@@ -456,6 +510,27 @@ void showOptionScreen4(const char *optionName) {
   }
 
   switch (buttonPressCount) {
+
+   /* case 1: 
+      OLED.clearDisplay();
+  OLED.setCursor(20, 0);
+  OLED.setTextSize(1);
+  OLED.setTextColor(WHITE, BLACK);
+  OLED.println("<<Height record 2P>>");
+  OLED.setCursor(0, 20);
+  OLED.print("Angle: ");
+  OLED.println(Angle2P);
+  OLED.print("DistanceA:  ");
+  OLED.println(savedDistance2PA);
+  OLED.print("DistanceB:  ");
+  OLED.println(savedDistance2PB);
+  OLED.println(" CM");
+  OLED.print("Height:   ");
+  OLED.print(Height2P);
+  OLED.println(" CM");
+
+      break;*/
+
     case 1: 
       OLED.clearDisplay();
       OLED.setCursor(0, 0);
@@ -558,14 +633,21 @@ void displayDistance() {
 }
 
 
-void Highrecord_F() {
+void Highrecord_3P() {
   float angleTopRad = lookUpAngle *(PI / 180.0);
   float angleBottomRad = lookDownAngle *(PI / 180.0);
 
-  float h1 = savedDistance * tan(angleTopRad); //ใช้หน่วยเป็นเรเดียน
-  float h2 = savedDistance * tan(angleBottomRad);
-  Height = h1 + h2;
+  float h1 = savedDistance3P * tan(angleTopRad); //ใช้หน่วยเป็นเรเดียน
+  float h2 = savedDistance3P * tan(angleBottomRad);
+  Height = h1 + h2 + 25; //20 = ค่าควา่มที่คาคเคลือน
 }
+
+/**void Highrecord_2P() {
+  float angle2PRad = Angle2P *(PI / 180.0);
+  Height2P = sqrt(pow(savedDistance2PA,2)+pow(savedDistance2PB,2) -2 * savedDistance2PA * savedDistance2PB * cos(angle2PRad));
+   /* float half_savedDistance2PA = savedDistance2PA / 2.0
+  Height2P = half_savedDistance2PA * tan(angle2PRad); //ใช้หน่วยเป็นเรเดียน
+}*/
 
 void clearEEPROMRange(int startAddress, int endAddress) {
   for (int i = startAddress; i <= endAddress; i++) {
@@ -574,65 +656,19 @@ void clearEEPROMRange(int startAddress, int endAddress) {
 }
 
 void gyroread() {
-    mpu.update();
+  mpu.update();
+  
+  if((millis()-timer)>10){ // print data every 10ms
+  // ปกติ: Pitch = atan2(Ay, Az), Roll = atan2(Ax, sqrt(Ay^2 + Az^2))
+  // แกน y เป็น แกนหลักแทน x
+  /*roll pitch หน่วยเป็นองศา*/
+//roll = atan2(mpu.getAccZ(), mpu.getAccX()) * RAD_TO_DEG; // (180 / PI)
+ pitch = atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG;
+ //roll = mpu.getAngleX();    // ใช้ Z แทน Roll
+ pitcha = mpu.getAngleX();  // ใช้ -X แทน Pitch
 
-    if ((millis() - timer) > 10) { // print data every 10ms
-        float accX = mpu.getAccX();
-        float accY = mpu.getAccY();
-        float accZ = mpu.getAccZ();
-        float gyroX = mpu.getGyroX(); // หน่วยเป็น °/s
-        float gyroY = mpu.getGyroY();
-
-        // คำนวณมุมจาก Accelerometer
-        float rollAcc = atan2(accZ, accX) * RAD_TO_DEG;
-        float pitchAcc = atan2(accY, sqrt(accX * accX + accZ * accZ)) * RAD_TO_DEG;
-
-        // คำนวณ dt
-        dt = (millis() - timer) / 1000.0;
-        timer = millis();
-
-        // ใช้ Kalman Filter
-        roll = kalmanFilter(rollAcc, gyroX, dt);
-        pitch = kalmanFilter(pitchAcc, gyroY, dt);
-
-        // ปรับมุมให้อยู่ในช่วง -180° ถึง +180°
-        if (pitch > 180) pitch -= 360;
-        if (roll > 180) roll -= 360;
-    }
+	timer = millis();  
+  }
+    if (pitch < 0) pitch += 360.0;
+  if (pitcha < 0) roll += 360.0;
 }
-
-
-float kalmanFilter(float newAngle, float newRate, float dt) {
-    // 1. คำนวณมุมจาก Gyroscope
-    rate = newRate - bias;
-    angle += dt * rate;
-
-    // 2. ปรับค่าความไม่แน่นอน
-    P[0][0] += dt * (dt * P[1][1] - P[0][1] - P[1][0] + Q_angle);
-    P[0][1] -= dt * P[1][1];
-    P[1][0] -= dt * P[1][1];
-    P[1][1] += Q_bias * dt;
-
-    // 3. คำนวณ Kalman Gain
-    float S = P[0][0] + R_measure;
-    float K[2];
-    K[0] = P[0][0] / S;
-    K[1] = P[1][0] / S;
-
-    // 4. ปรับค่าโดยใช้ Accelerometer
-    float y = newAngle - angle;
-    angle += K[0] * y;
-    bias += K[1] * y;
-
-    // 5. ปรับค่าความไม่แน่นอน
-    float P00_temp = P[0][0];
-    float P01_temp = P[0][1];
-
-    P[0][0] -= K[0] * P00_temp;
-    P[0][1] -= K[0] * P01_temp;
-    P[1][0] -= K[1] * P00_temp;
-    P[1][1] -= K[1] * P01_temp;
-
-    return angle;
-}
-
