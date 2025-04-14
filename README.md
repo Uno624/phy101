@@ -1,6 +1,6 @@
 ![Screenshot 2025-03-28 155803](https://github.com/user-attachments/assets/dd13fec4-c6e5-4747-83f2-dadfa637a1a8)
 
-ดันขึ้นดันลงได้ ดันขึ้นเป็นการย้อนกลับ(BUTTON_R) ดันลงเป็นการเลื่อนmenu(BUTTON_L) กดเป็นไกลการเหลือ(BUTTON_SELECT)
+ดันขึ้นดันลงได้ ดันขึ้นเป็นการย้อนกลับ(BUTTON_R) ดันลงเป็นการเลื่อนmenu(BUTTON_L) กดเป็นไกลการเลือก(BUTTON_SELECT)
 ![20250414_175702](https://github.com/user-attachments/assets/d0c5231b-9c5f-4d25-949b-380a70bc7f18)
 
 สมการ High's taget 3จุด เส้นตรงกลางสามเหลียมคือ common พายามให้องศาใกล้ 0 มากสุด เพราะมันจะเก็บระยาเราจากเป้าหมาย ถ้ามุมมันมีความคาคเคลือนไปปรับ offset ได้ที่ dedug sensor
