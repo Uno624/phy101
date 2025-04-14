@@ -10,7 +10,7 @@
 
 ![Screenshot 2025-04-14 203343](https://github.com/user-attachments/assets/4355a980-b48a-4424-b2f8-f6d54c9a99fb)
 
-ปรับ offset ด้วยการกดไกล (ได้ทุกหน้าในmenuoffset)
+ปรับ offset ด้วยการกดไกล (กดได้ทุกหน้าในmenu dedug sensor)
 
 ![20250414_175904](https://github.com/user-attachments/assets/2d7a3707-82d2-4c6f-b73d-698c216cfd6c)
 
