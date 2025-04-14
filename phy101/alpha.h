@@ -236,9 +236,9 @@ void showOptionScreen1(const char *optionName) {
     OLED.clearDisplay();
     gyroread(); 
     OLED.setCursor(0, 0); 
-    OLED.print("pitch0tan: ");
+    OLED.print("pitchget: ");
   OLED.println(pitch, 2);  // แสดง Roll ใน 0-360 องศา
-  OLED.print("Pitch: ");
+  OLED.print("Pitch0tan: ");
   OLED.println(pitcha, 2);  // แสดง Pitch ใน 0-360 องศา*/
 
    OLED.println("TOF_0");
@@ -663,9 +663,9 @@ void gyroread() {
   // แกน y เป็น แกนหลักแทน x
   /*roll pitch หน่วยเป็นองศา*/
 //roll = atan2(mpu.getAccZ(), mpu.getAccX()) * RAD_TO_DEG; // (180 / PI)
- pitch = atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG;
+ pitcha = atan2(mpu.getAccY(), sqrt(mpu.getAccX() * mpu.getAccX() + mpu.getAccZ() * mpu.getAccZ())) * RAD_TO_DEG;
  //roll = mpu.getAngleX();    // ใช้ Z แทน Roll
- pitcha = mpu.getAngleX();  // ใช้ -X แทน Pitch
+ pitch = mpu.getAngleX();  // ใช้ -X แทน Pitch มันบ่แม่น
 
 	timer = millis();  
   }
